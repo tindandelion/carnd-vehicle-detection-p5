@@ -14,20 +14,12 @@ The goals / steps of this project are the following:
   detections frame by frame to reject outliers and follow detected vehicles;
 * Estimate a bounding box for vehicles detected.
 
-[//]: # (Image References)
-[image1]: ./examples/car_not_car.png
-[image2]: ./examples/HOG_example.jpg
-[image3]: ./examples/sliding_windows.jpg
-[image4]: ./examples/sliding_window.jpg
-[image5]: ./examples/bboxes_and_heat.png
-[image6]: ./examples/labels_map.png
-[image7]: ./examples/output_bboxes.png
-[video1]: ./project_video.mp4
-
 ## Project files
 
 The submission includes the following files:
 
+* `hog-exploration.ipynb` is a Jupyter notebook where I explore HOG
+  transformation; 
 * `feature-selection.ipynb` is a Jupyter notebook that contains code to select
   feature extraction parameters and train a classifier;
 * `vehicle-delection.ipynb` is a Jupyter notebook where I implement the vehicle
@@ -38,29 +30,32 @@ The submission includes the following files:
 
 ## Solution description
 
+### Histogram of Oriented Gradients
 
-###Histogram of Oriented Gradients (HOG)
+The project's description suggests using a method called *Histogram of Oriented
+Gradients* to extract features from the image, suitable for robust vehicle
+detection classifier. 
 
-####1. Explain how (and identify where in your code) you extracted HOG features
-    from the training images.
+To extract HOG features, I use a function `skimage.hog` (lines 10-16 in
+`common.py`). As an example, I use one of the vehicle images from the training
+dataset (converted to LUV color space):
 
-The code for this step is contained in the first code cell of the IPython
-notebook (or in lines # through # of the file called `some_file.py`).
+![Vehicle in LUV color space](./output_images/luv_channels.png)
 
-I started by reading in all the `vehicle` and `non-vehicle` images.  Here is an
-example of one of each of the `vehicle` and `non-vehicle` classes:
+Each color channel can undergo the HOG transformation, with the following output
+result (using the visualization provided by `skimage.hog()`):
 
-![alt text][image1]
+![HOG transformation](./output_images/hog_feature_extracted.png)
 
-I then explored different color spaces and different `skimage.hog()` parameters
-(`orientations`, `pixels_per_cell`, and `cells_per_block`).  I grabbed random
-images from each of the two classes and displayed them to get a feel for what
-the `skimage.hog()` output looks like.
+HOG transformation is controlled by a number of parameters that can impact the
+end result and, eventually, the performance of the classifier that uses
+extracted features. The next step in the project is to explore the parameter
+space and select such values that provide best classification accuracy.
 
-Here is an example using the `YCrCb` color space and HOG parameters of
-`orientations=8`, `pixels_per_cell=(8, 8)` and `cells_per_block=(2, 2)`:
+### Parameter selection
 
-## Parameter selection
+The solution for selecting the optimal feature extraction parameters is located
+in the Jupyter notebook [feature-selection.ipynb](./feature-selection.ipynb).
 
 The number of feature selection parameters to be tuned is quite large and it's
 not obvious how they would impact the performance of the detection algorithm. I
@@ -84,7 +79,7 @@ In order to plug the feature extration algorithm into a pipeline, I implemented
 a class `FeatureExtractor` that is essentially an adapter around
 `extract_features()` function, suitable for prugging into the grid search. 
 
-The complete classification pipeline consists of the following blocks:
+The complete classification pipeline consists of the following blocks (cell #7):
 
 * `FeatureExtractor` that extracts HOG, spacial, and color features from the raw
   images;
@@ -93,60 +88,94 @@ The complete classification pipeline consists of the following blocks:
 
 The pipeline is then plugged into the `RandomizedGridSearch`. 
 
-Here are a few parameter combinations that the grid search found to show the
+Here is the parameter combination that the grid search found to show the
 best performance (extracted from `output_model/gridsearch_result.csv`):
+
+| Feature        | Value |
+|:---------------|------:|
+| Color Space    | YUV   |
+| Histogram bins | 32    |
+| Spatial size   | 32    |
+| Orientation bins | 11  |
+| Pixels per cell | 8    |
+| Cells per block | 2    |
+	
 
 At the end, I save the best trained classifier into a Pickle file, along with
 the parameter values, for use in vehicle detection. Note that I remove the
 `FeatureExtractor` instance from the pipeline before saving, as I decided to use
 an optimized sliding window approach for vehicle detection (see below).
 
+### Sliding window search
 
+The pipeline for vehicle detection is located in the Jupyter notebook
+[vehicle-delection.ipynb](./vehicle-delection.ipynb).
 
-###Sliding Window Search
+To search for the vehicle in the bigger images I decided to use the algorithm
+that would calculate the HOG features for the entire image and then sub-samples
+the 64-pixel windows from the feature matrix. This algorithm showed better
+performance in terms of speed and reasonable accuracy. The algorithm is
+implemented in the class `CarFinder`, located in the cell #4. 
 
-####1. Describe how (and identify where in your code) you implemented a sliding window search.  How did you decide what scales to search and how much to overlap windows?
+The implementation allows for scaling the image prior to feature
+extraction. Effectively, it means that I can use different search window sizes,
+relative to the image size. 
 
-I decided to search random window positions at random scales all over the image and came up with this (ok just kidding I didn't actually ;):
+As a result, the algorithm returns a set of rectangle coordinates for search
+windows that were detected as containing a car. This set of rectangles is then
+processed to produce the average bounding rectangle (see below).
 
-![alt text][image3]
+### Vehicle detection
 
-####2. Show some examples of test images to demonstrate how your pipeline is working.  What did you do to optimize the performance of your classifier?
+The complete algorithm that detects vehicles and their corresponding bounding
+rectangles in an image is implemented in the class `AccumulativeCarDetector`,
+located in the cell #5. 
 
-Ultimately I searched on two scales using YCrCb 3-channel HOG features plus spatially binned color and histograms of color in the feature vector, which provided a nice result.  Here are some example images:
+The algorithm is tailored to process video streams, so it averages the detection
+result across previous 20 frames, to provide smoother operation and remove false
+positives. The steps executed for each video frame image are: 
 
-![alt text][image4]
----
+1. Using the `CarFinder` sliding window search implementation, search for the
+vehicles with window sizes 64, 96, and 128 pixels (respective scale factors are
+1, 1.5, and 2). I figured that these window sizes provide the best results for
+different car sizes.
+2. Using current and previous 19 detections, build a heat map where the `hot`
+regions identify the car(s).
+3. Threshold the heat map to remove occasional false positive detections, with
+the threshold value of 40, and calculate the bounding rectangles that enclose
+`hot` regions. 
 
-### Video Implementation
+Here are some example images that show detected hot windows, the thresholded
+heatmap, and the resulting bounding rectangles that mark the vehicles in images:
 
-####1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (somewhat wobbly or unstable bounding boxes are ok as long as you are identifying the vehicles most of the time with minimal false positives.)
-Here's a [link to my video result](./project_video.mp4)
+![Car detection 1](./output_images/car_detection_0.png)
+![Car detection 2](./output_images/car_detection_3.png)
+![Car detection 3](./output_images/car_detection_4.png)
 
+Notice that thresholding helped eliminate the false positive detection in the
+3rd image above. 
 
-####2. Describe how (and identify where in your code) you implemented some kind of filter for false positives and some method for combining overlapping bounding boxes.
+### Video implementation
 
-I recorded the positions of positive detections in each frame of the video.  From the positive detections I created a heatmap and then thresholded that map to identify vehicle positions.  I then used `scipy.ndimage.measurements.label()` to identify individual blobs in the heatmap.  I then assumed each blob corresponded to a vehicle.  I constructed bounding boxes to cover the area of each blob detected.  
+The video processing pipeline is located in cells 6-7 in the notebook.
+The resulting video is written to the file at [output_images/project_video.mp4](./output_images/project_video.mp4)
 
-Here's an example result showing the heatmap from a series of frames of video, the result of `scipy.ndimage.measurements.label()` and the bounding boxes then overlaid on the last frame of video:
+## Discusson
 
-### Here are six frames and their corresponding heatmaps:
+The challenges I faced during the project was to implement an efficient
+algorithm for sliding window search. The simple sliding window alogorithm was
+too slow, so I ended up with a more complicated, but efficient HOG subsampling
+algorithm. 
 
-![alt text][image5]
+I also had some issues with false positive detections that were removed by
+applying thresholding and approximation across multiple video frames. 
 
-### Here is the output of `scipy.ndimage.measurements.label()` on the integrated heatmap from all six frames:
-![alt text][image6]
+There are a few improvements I could suggest: 
 
-### Here the resulting bounding boxes are drawn onto the last frame in the series:
-![alt text][image7]
+1. Track the detected vehicles accross multiple frames and use more sensitive
+algorithm around the detected vehicle to find the object's boundaries more
+accurately. 
+2. Process multiple windows in parallel to improve algorithm's speed.
 
-
-
----
-
-###Discussion
-
-####1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
-
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
+g
 
