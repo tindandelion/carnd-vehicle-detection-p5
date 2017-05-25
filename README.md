@@ -100,11 +100,15 @@ best performance (extracted from `output_model/gridsearch_result.csv`):
 | Pixels per cell | 8    |
 | Cells per block | 2    |
 	
+I used train/test split (80/20) of the original dataset to estimate the
+classifier performance. With the parameters above, the classification accuracy
+was 0.9949, or 99.5% (cell #11).
 
-At the end, I save the best trained classifier into a Pickle file, along with
-the parameter values, for use in vehicle detection. Note that I remove the
-`FeatureExtractor` instance from the pipeline before saving, as I decided to use
-an optimized sliding window approach for vehicle detection (see below).
+At the end, I save the best trained classifier into a Pickle file
+[output_model/model.pkl](./output_model/model.pkl), along with the parameter
+values, for use in vehicle detection. Note that I remove the `FeatureExtractor`
+instance from the pipeline before saving, as I decided to use an optimized
+sliding window approach for vehicle detection (see below).
 
 ### Sliding window search
 
