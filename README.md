@@ -115,19 +115,19 @@ sliding window approach for vehicle detection (see below).
 The pipeline for vehicle detection is located in the Jupyter notebook
 [vehicle-delection.ipynb](./vehicle-delection.ipynb).
 
-To search for the vehicle in the bigger images I decided to use the algorithm
-that would calculate the HOG features for the entire image and then sub-samples
-the 64-pixel windows from the feature matrix. This algorithm showed better
-performance in terms of speed and reasonable accuracy. The algorithm is
-implemented in the class `CarFinder`, located in the cell #4. 
+To search for the vehicle in the bigger images I decided to use the HOG
+sub-sampling algorithm. This algorithm would calculate the HOG features for the
+entire image and then sub-samples the 64-pixel windows from the feature
+matrix. This algorithm showed better speed and reasonable accuracy. The
+algorithm is implemented in the class `CarFinder`, located in the cell #4.
 
 The implementation allows for scaling the image prior to feature
 extraction. Effectively, it means that I can use different search window sizes,
 relative to the image size. 
 
-As a result, the algorithm returns a set of rectangle coordinates for search
-windows that were detected as containing a car. This set of rectangles is then
-processed to produce the average bounding rectangle (see below).
+The algorithm returns a set of rectangle coordinates for search windows that
+were detected as containing a car. This set of rectangles is then processed to
+produce the average bounding rectangle (see below).
 
 ### Vehicle detection
 
